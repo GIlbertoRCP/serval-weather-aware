@@ -13,7 +13,7 @@ Baseline code: [ConnectedSystemsLab/Serval](https://github.com/ConnectedSystemsL
 
 ```bash
 conda env create -p .conda-env -f environment.yml   # Python 3.9 environment in ./.conda-env
-QUICK=1 scripts/run_all.sh                          # ~1 minute smoke test -> results/quick/
+QUICK=1 scripts/run_all.sh                          # ~2 minute smoke test -> results/quick/
 scripts/run_all.sh                                  # full experiment       -> results/
 scripts/check_baseline_equivalence.sh               # proves the extension-off code == upstream Serval
 ```
@@ -47,7 +47,7 @@ With `--weather_model none` (the default) the simulator is byte-for-byte upstrea
 | Metric 1: energy conserved (Sec. 4.1) | `onboard_compute_J` in `summary.csv`; Wh saved in `scenario_c_persistence_sweep.csv` |
 | Metric 2: turnaround latency CDF | `fig7_reproduction.png`, `fig8b_reproduction.png`, `extension_latency_cdf.png` |
 | Metric 3: queue backlog and drop rate | Not measured separately; `clear_images_lost_pct` in `cloud_decisions.csv` is the drop rate of usable images |
-| Scenario A: baseline reproduction | `inorder`, `serval_noweather`, `serval` arms |
+| Scenario A: baseline reproduction (Fig. 7, Fig. 8) | `inorder`, `serval_noweather`, `serval` arms; arrival-rate sweep (`fig8_arrival_rate.png`) |
 | Scenario B: regional climate sweep | `markov`, `markov_arid`, `markov_tropical` arms |
 | Scenario C: persistence sweep, 10% to 70% | `sweep_pcc10` ... `sweep_pcc70` arms, `scenario_c_pareto.png` |
 | 200 satellites, 7-day trace | 89 satellites (every Planet Dove with a public TLE), 3 days, to keep the full run under an hour |
@@ -96,6 +96,7 @@ Consequently we reproduce the paper's **qualitative trends**, not its absolute n
 │   ├── run_all.sh                      Generates the workload, runs all arms, analyzes
 │   └── check_baseline_equivalence.sh   Extension-off simulator vs pristine upstream
 ├── analysis/analyze.py                 Parses logs -> tables and figures in results/
+├── analysis/plot_arrival_rate.py       Fig. 8: latency vs. arrival rate across workloads
 ├── data/public/                        Cached public inputs (TLEs, weather)
 ├── data/generated/                     Generated workload + per-arm logs (created by run_all.sh)
 └── results/                            Figures and CSV tables (created by run_all.sh)
@@ -127,7 +128,7 @@ The scripts use `./.conda-env/bin/python` by default. To use another interpreter
 scripts/run_all.sh
 ```
 
-This (1) generates the workload into `data/generated/` (all public Planet Doves, 2026-10-20 to 2026-10-23, seed 42), (2) runs every arm below on identical inputs, four at a time, and (3) writes all tables and figures to `results/`. Expect roughly 40–60 minutes on a laptop. `QUICK=1 scripts/run_all.sh` runs a 20-satellite, 1-day version in about a minute (outputs in `results/quick/`).
+This (1) generates the workload into `data/generated/` (all public Planet Doves, 2026-10-20 to 2026-10-23, seed 42), (2) runs every arm below on identical inputs, four at a time, and (3) writes all tables and figures to `results/`. Expect roughly 60–80 minutes on a laptop. `QUICK=1 scripts/run_all.sh` runs a 20-satellite, 1-day version in about 2 minutes (outputs in `results/quick/`).
 
 ### 5.2 Experimental arms
 
@@ -143,6 +144,7 @@ All arms share the workload, orbits, ground stations, 1% compute/network budget 
 | `markov_empirical` | Markov tracking with persistence fitted by `tools/fit_markov.py` on a disjoint week (2026-10-13 to 19) | `--weather_model markov --regime empirical` |
 | `markov_arid`, `markov_tropical` | Scenario B: sensitivity to the regime prior | `--regime arid` / `--regime tropical` |
 | `sweep_pcc10` ... `sweep_pcc70` | Scenario C: cloud persistence p_cc = 0.1 ... 0.7 (fitted p_ss held fixed) | `--regime empirical --p_cc 0.1` ... |
+| `inorder`, `serval` in `data/generated-rate/fire02`, `fire15`, `fire5` | Fig. 8: same workload with fire in 2%, 15% and 50% of clear forest frames (main run: 5%) | generator `--fire_share` |
 
 To run one arm by hand:
 ```bash
@@ -155,6 +157,7 @@ scripts/run_arm.sh data/generated markov 2026-10-20T00:00:00 2026-10-23T00:00:00
 | File | Shows | Paper counterpart |
 |---|---|---|
 | `results/fig7_reproduction.png` | High-priority (fire) latency CDF, in-order vs Serval | Fig. 7 |
+| `results/fig8_arrival_rate.png`, `results/fig8_arrival_rate.csv` | Fire latency (median, p90) vs. high-priority arrival rate, in-order vs Serval | Fig. 8 (latency vs. query arrival rate) |
 | `results/fig8b_reproduction.png` | Serval with vs without the weather side channel | Fig. 8b |
 | `results/summary.csv` | Per arm: fire latency (median/p90), delivered counts, onboard compute (s, J), SAR alerts | Sec. 6.1, Table 5 discussion |
 | `results/cloud_decisions.csv` | Per arm: how forest images' cloud decisions compare with ground truth (skipped correctly, skipped wrongly, ran filter) | Table 5 |
@@ -188,6 +191,16 @@ From `results/summary.csv` and `results/cloud_decisions.csv`:
 | `oracle` | 45 / 45 | 0.87 h | 204 s | 100% | 0% | 86 |
 
 **Baseline reproduction (Scenario A).** Serval delivers fire images about 28x faster than in-order downlink (median 1.23 h vs 34.4 h, and all 45 vs 24 delivered), the trend of paper Fig. 7. The weather side channel cuts onboard filter compute by 83% (paper Table 5: 83.6%). Unlike paper Fig. 8b, it does not shorten fire latency here: at our scale compute is not the bottleneck, and the forecast wrongly calls 3 clear fire images cloudy.
+
+**Latency vs. arrival rate (paper Fig. 8, `fig8_arrival_rate.png`).** We rerun `inorder` and `serval` on the same workload with fires in 2%, 5% (main run), 15% and 50% of clear forest frames:
+
+| Fire images per day | 6.3 | 15 | 46.7 | 139 |
+|---|---|---|---|---|
+| Serval median / p90 (h) | 1.23 / 1.25 | 1.23 / 1.28 | 1.23 / 1.27 | 1.25 / 7.51 |
+| Serval delivered | 18 / 19 | 42 / 45 | 133 / 140 | 395 / 417 |
+| In-order median (h) | 29.5 | 34.4 | 28.8 | 34.4 |
+
+Serval keeps high-priority latency flat across a 7x increase in arrival rate. At 139 fires per day the tail grows (p90 7.5 h) as the 1% bandwidth reserved for the query (`--priority_bw_allocation 0.01`) saturates, the same qualitative behavior as the paper's Fig. 8. In-order latency does not depend on the rate, since it ignores priority.
 
 **Extension.** With persistence fitted on a separate week, Markov tracking raises cloud-decision accuracy from 88.0% to 92.8% and cuts clear images wrongly skipped as cloudy from 263 to 149 (−43%), at 14% more compute than Serval (still 81% below no-weather Serval). Fire latency is unchanged: the 3 fires Serval loses are still lost. The SAR offload alerts reach the ground in a median 1.23 h.
 

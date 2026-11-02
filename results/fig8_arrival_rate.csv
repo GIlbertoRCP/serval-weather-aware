@@ -1,0 +1,9 @@
+dataset,arm,fire_images,fires_per_day,fire_delivered,fire_median_h,fire_p90_h
+data/generated-rate/fire02,inorder,19,6.3,8,29.45,44.383
+data/generated,inorder,45,15.0,24,34.417,44.607
+data/generated-rate/fire15,inorder,140,46.7,63,28.783,44.833
+data/generated-rate/fire5,inorder,417,139.0,211,34.4,44.883
+data/generated-rate/fire02,serval,19,6.3,18,1.233,1.253
+data/generated,serval,45,15.0,42,1.233,1.277
+data/generated-rate/fire15,serval,140,46.7,133,1.233,1.268
+data/generated-rate/fire5,serval,417,139.0,395,1.25,7.51

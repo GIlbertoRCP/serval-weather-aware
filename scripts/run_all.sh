@@ -47,5 +47,24 @@ for pcc in 10 20 30 40 50 60 70; do
 done
 wait_all
 
+# Scenario A / paper Fig. 8: latency vs. high-priority query arrival rate. Each workload is
+# the main one with a different --fire_share (fire images nest, everything else identical).
+RATE_DATASETS=("$DATASET")
+for share in 0.02 0.15 0.5; do
+    ds="$DATASET-rate/fire${share#0.}"
+    "$PY" tools/generate_workload.py --num_sats "$SATS" --start "$START" --end "$END" \
+        --ca_interval 2 --fire_share "$share" --output_dir "$ds"
+    rm -rf "${ds:?}/logs" "${ds:?}/run"
+    RATE_DATASETS+=("$ds")
+done
+for ds in "${RATE_DATASETS[@]:1}"; do
+    scripts/run_arm.sh "$ds" inorder "$START" "$END" --filter_config_file data/filter_config/inorder.json \
+        "${COMMON[@]}" & PIDS+=($!)
+    scripts/run_arm.sh "$ds" serval "$START" "$END" "${COMMON[@]}" & PIDS+=($!)
+    if [[ "$ds" == *fire15 ]]; then wait_all; fi
+done
+wait_all
+
 "$PY" analysis/analyze.py --dataset "$DATASET" --output "$RESULTS"
+"$PY" analysis/plot_arrival_rate.py --datasets "${RATE_DATASETS[@]}" --output "$RESULTS"
 echo "Results written to $RESULTS/"
