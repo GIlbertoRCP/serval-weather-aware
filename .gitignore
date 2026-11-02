@@ -1,0 +1,13 @@
+# Local Python environments
+.conda-env/
+.venv/
+__pycache__/
+*.pyc
+
+# Simulation outputs that scripts regenerate (large)
+data/*/logs/
+data/*/run/
+data/smoke/
+data/quick/
+results/quick/
+data/generated/

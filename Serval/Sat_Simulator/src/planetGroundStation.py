@@ -5,6 +5,7 @@ from src.node import Node
 from .recieveGS import RecieveGS
 from src.utils import FusedQueue, MyQueue
 from src.filter_graph import FilterGraph, FilterStatus
+from weather_engine import WeatherEngine
 
 
 class PlanetGS(RecieveGS):
@@ -46,6 +47,9 @@ class PlanetGS(RecieveGS):
         while not self.received_data_queue.empty():
             data = self.received_data_queue.pop()
             Log("Processing data object: ", self, data)
+            if WeatherEngine.engine is not None:
+                # The full image is on the ground now, so its cloud state is known
+                WeatherEngine.engine.observe(data)
             image_computation_queue.append(data)
         for image in image_computation_queue:
             if image.compute_storage is not None:

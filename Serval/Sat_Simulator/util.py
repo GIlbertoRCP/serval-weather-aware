@@ -63,7 +63,10 @@ def get_planet_sat_tle(id: "str", current_date: "datetime") -> "str":
         f_date = "00" + f_date
     f_date = str(current_date.year)[-2:] + f_date
     f_date = float(f_date)
-    tle_idx = [np.where(days < f_date)[0][-1]]
+    earlier = np.where(days < f_date)[0]
+    # Public TLEs (CelesTrak) only carry the latest epoch; fall back to the oldest TLE
+    # available and let SGP4 propagate backwards to the simulation start.
+    tle_idx = [earlier[-1] if len(earlier) else 0]
     v = np.unique(tle_idx)
     tles_ret = []
     for idx in range(len(v)):

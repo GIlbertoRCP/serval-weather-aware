@@ -1,0 +1,16 @@
+# Tested with Python 3.9 on macOS (Apple Silicon). Serval's code needs Python < 3.10.
+# fastlogging is intentionally absent: it does not build on current systems, and
+# compat/fastlogging.py provides the small subset Serval uses.
+astropy==6.0.1
+Cartopy==0.23.0
+itur==0.4.0
+matplotlib==3.9.4
+networkx==3.2.1
+numpy==1.26.4
+pandas==2.3.3
+PyAstronomy==0.25.0
+scipy==1.13.1
+seaborn==0.13.2
+sgp4==2.25
+shapely==2.0.7
+skyfield==1.55

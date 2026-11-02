@@ -1,0 +1,15 @@
+arm,skip_cloudy_but_clear,skip_cloudy_correct,skip_clear_but_cloudy,skip_clear_correct,ran_cloud_filter,forest_images,cloud_filter_skipped_pct,decision_accuracy_pct,clear_images_lost_pct
+markov,58,1380,246,608,384,2676,85.7,88.6,7.0
+markov_arid,58,1380,263,619,356,2676,86.7,88.0,7.0
+markov_empirical,45,1372,149,678,432,2676,83.9,92.8,5.4
+markov_tropical,45,1374,124,538,595,2676,77.8,93.7,5.4
+oracle,0,1843,0,833,0,2676,100.0,100.0,0.0
+serval,58,1384,263,611,360,2676,86.5,88.0,7.0
+serval_noweather,0,0,0,0,2676,2676,0.0,100.0,0.0
+sweep_pcc10,58,1380,263,619,356,2676,86.7,88.0,7.0
+sweep_pcc20,58,1380,263,629,346,2676,87.1,88.0,7.0
+sweep_pcc30,41,1359,259,637,380,2676,85.8,88.8,4.9
+sweep_pcc40,37,1320,226,650,443,2676,83.4,90.2,4.4
+sweep_pcc50,37,1320,145,653,521,2676,80.5,93.2,4.4
+sweep_pcc60,37,1320,149,658,512,2676,80.9,93.0,4.4
+sweep_pcc70,37,1320,149,670,500,2676,81.3,93.0,4.4

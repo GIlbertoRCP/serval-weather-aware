@@ -10,6 +10,7 @@ from src.filter_graph import FilterGraph, Filter
 import src.log as log
 from fastlogging import LogInit, INFO, Logger
 from util import create_simulator, build_filters
+from weather_engine import REGIMES, WeatherEngine
 
 print("Everything imported")
 
@@ -33,7 +34,18 @@ if __name__ == "__main__":
     parser.add_argument("--downlink_bandwidth_scaling", type=float,default=const.DOWNLINK_BANDWIDTH_SCALING)
     parser.add_argument("--cloud_threshold", type=float, nargs=2, default=const.DEFAULT_CLOUD_THRESHOLD)
     parser.add_argument("--oec", action="store_true", default=False, help="Whether to use the OEC", dest="oec")
+    # Extension: weather-aware cloud tracking (see weather_engine.py)
+    parser.add_argument("--weather_model", choices=["none", "markov", "oracle"], default="none")
+    parser.add_argument("--regime", choices=sorted(REGIMES), default="maritime")
+    parser.add_argument("--p_cc", type=float, default=None,
+                        help="override the regime's cloud-to-cloud persistence (Scenario C sweep)")
+    parser.add_argument("--query_ttl_passes", type=int, default=3)
+    parser.add_argument("--image_cells_file", type=str, default="data/image_cells.csv")
     args = parser.parse_args()
+    if args.weather_model != "none":
+        WeatherEngine.engine = WeatherEngine(args.image_cells_file, mode=args.weather_model,
+                                             regime=args.regime, p_cc=args.p_cc, ttl=args.query_ttl_passes,
+                                             thresholds=args.cloud_threshold)
     const.DOWNLINK_BANDWIDTH_SCALING = args.downlink_bandwidth_scaling
     const.OEC = args.oec
     log.logger = LogInit(pathName=args.logging_file,
@@ -47,3 +59,5 @@ if __name__ == "__main__":
     print("Running simulation...")
     sim.run()
     print("Simulation complete")
+    if WeatherEngine.engine is not None:
+        print("Weather engine stats:", WeatherEngine.engine.stats)

@@ -1,0 +1,4 @@
+arm,fire_images,fire_delivered,fire_median_h,fire_p90_h,all_median_h,all_delivered,images,onboard_compute_s,onboard_compute_J,sar_alerts,sar_alert_median_h
+markov_arid,45,42,1.233,1.277,25.583,57989,183196,1310.3,39309.3,50,1.233
+markov_empirical,45,42,1.233,1.277,25.683,57867,183196,1525.6,45766.9,50,1.233
+markov_tropical,45,42,1.233,1.283,25.767,57242,183196,2008.4,60253.2,51,1.233

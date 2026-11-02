@@ -6,6 +6,7 @@ from .imageSatellite import ImageSatellite
 from .filter_graph import FilterGraph, FilterStatus
 from . import log
 from .utils import FusedQueue, MyQueue, Time
+from weather_engine import ALERT_BITS, WeatherEngine
 
 
 class PlanetSatellite(ImageSatellite):
@@ -76,6 +77,7 @@ class PlanetSatellite(ImageSatellite):
         """
         while len(self.images) > 0 and self.images[0].time <= self.time:
             image = self.images.pop(0)
+            self.apply_weather_engine(image)
             FilterGraph.init_image(image)
             FilterGraph.compute_prior_on_image(image)
             if not image.score:  # Image has low prior
@@ -91,6 +93,28 @@ class PlanetSatellite(ImageSatellite):
             log.Log("Image captured by sat", image, self)
             self.currentMWs -= self.energy_config["camera_energy"]
             self.cache_size += image.size
+
+    def apply_weather_engine(self, image: "Image") -> None:
+        """
+        Extension hook: replace the image's cloud side channel with the weather engine's
+        clear-sky estimate before Serval decides whether to bypass the cloud filter.
+        No-op when the engine is disabled, so baseline behaviour is unchanged.
+        """
+        engine = WeatherEngine.engine
+        if engine is None or "cloud" not in image.side_channel_info:
+            return
+        p_clear = engine.predict(image, self.time.to_datetime())
+        if p_clear is None:
+            return
+        log.Log("Weather engine prediction", image, {"p_clear": round(p_clear, 4)})
+        # Copy: Image() shares a mutable default dict across instances
+        image.side_channel_info = dict(image.side_channel_info, cloud=p_clear)
+        if engine.record_decision(image, p_clear):
+            alert = Image(size=ALERT_BITS, region=image.region, time=image.time,
+                          name=f"{image.name}_sar_offload")
+            alert.score = 1
+            self.final_high_priority_queue.put(alert)
+            log.Log("SAR offload alert created", image, alert)
 
     def get_cache_size(self) -> int:
         """
@@ -116,6 +140,8 @@ class PlanetSatellite(ImageSatellite):
                     "time": image.compute_time}
             )
             status, side_results = FilterGraph.apply_on_image(image)
+            if WeatherEngine.engine is not None and image.completed_filters[-1] == "cloud":
+                WeatherEngine.engine.observe(image)
             if status == FilterStatus.COMPLETE_HI:
                 image.score = 1
                 self.final_high_priority_queue.put(image)

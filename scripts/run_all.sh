@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Reproduce every result: generate the workload, run all arms on identical inputs, analyze.
+#
+#   scripts/run_all.sh            full experiment (all public Doves, 3 days, ~30-60 min)
+#   QUICK=1 scripts/run_all.sh    smoke-size run (20 satellites, 1 day, ~3 min)
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${PYTHON:-$ROOT/.conda-env/bin/python}"
+cd "$ROOT"
+
+if [[ "${QUICK:-0}" == "1" ]]; then
+    DATASET=data/quick; SATS=20; START=2026-10-20T00:00:00; END=2026-10-21T00:00:00; RESULTS=results/quick
+else
+    DATASET=data/generated; SATS=200; START=2026-10-20T00:00:00; END=2026-10-23T00:00:00; RESULTS=results
+fi
+# Downlink scaled to 25% (as the paper does for its distributed-ground-station runs) so the
+# constellation is downlink-bound, which is the regime Serval targets. See README Sec. 5.
+COMMON=(--downlink_bandwidth_scaling 0.25)
+
+"$PY" tools/generate_workload.py --num_sats "$SATS" --start "$START" --end "$END" \
+    --ca_interval 2 --output_dir "$DATASET"
+rm -rf "${DATASET:?}/logs" "${DATASET:?}/run"
+
+PIDS=()
+run() { scripts/run_arm.sh "$DATASET" "$@" "${COMMON[@]}" & PIDS+=($!); }
+wait_all() { for p in "${PIDS[@]}"; do wait "$p"; done; PIDS=(); }  # fails if any arm failed
+
+# Baseline reproduction (paper Fig. 7 and Fig. 8b) and extension arms. All arms share the
+# same workload, orbits, ground stations, thresholds and seed; only the cloud side channel differs.
+run inorder          "$START" "$END" --filter_config_file data/filter_config/inorder.json
+run serval_noweather "$START" "$END" --cloud_threshold -1 2
+run serval           "$START" "$END"
+run markov           "$START" "$END" --weather_model markov --regime maritime
+wait_all
+run oracle           "$START" "$END" --weather_model oracle
+# Persistence fitted on a disjoint week (2026-10-13..19) by tools/fit_markov.py
+run markov_empirical "$START" "$END" --weather_model markov --regime empirical
+# Sensitivity of the extension to the climate-regime prior (Methods Sec. 2)
+run markov_arid      "$START" "$END" --weather_model markov --regime arid
+run markov_tropical  "$START" "$END" --weather_model markov --regime tropical
+wait_all
+# Scenario C (proposal Sec. 4.2): sweep cloud persistence p_cc 0.1..0.7, fitted p_ss held fixed
+for pcc in 10 20 30 40 50 60 70; do
+    run "sweep_pcc$pcc" "$START" "$END" --weather_model markov --regime empirical --p_cc "0.$((pcc / 10))"
+    if (( pcc == 40 )); then wait_all; fi
+done
+wait_all
+
+"$PY" analysis/analyze.py --dataset "$DATASET" --output "$RESULTS"
+echo "Results written to $RESULTS/"
