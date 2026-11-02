@@ -22,7 +22,7 @@ This repository contains the reproduction artifact and weather-aware scheduling 
 
 ### Baseline System
 Serval splits LEO satellite Earth Observation tasks across space and ground through **Query Bifurcation**:
-- **On-Orbit Filtering:** Runs low-power anomaly detectors aboard ~200 PlanetScope CubeSats in under 1.0 second ($5\text{--}10\text{ W}$).
+- **On-Orbit Filtering:** Runs low-power anomaly detectors aboard ~200 PlanetScope CubeSats in under 1.0 second (5–10 W).
 - **Prioritized Metadata Downlink:** Telemeters sub-1 KB bounding boxes during intermittent 5–10 minute ground passes, slashing dynamic emergency latency from 71.7 hours down to ~2 minutes.
 - **Ground Verification:** Transmits full raw optical images during off-peak contact passes for validation on high-performance ground clusters.
 
@@ -83,7 +83,7 @@ Our extension introduces:
 
 ```bash
 # 1. Clone this repository
-git clone https://github.com/<your-username>/serval-weather-aware.git
+git clone https://github.com/GIlbertoRCP/serval-weather-aware.git
 cd serval-weather-aware
 
 # 2. Create and activate the conda environment
