@@ -2,6 +2,11 @@ arm,skip_cloudy_but_clear,skip_cloudy_correct,skip_clear_but_cloudy,skip_clear_c
 markov,58,1380,246,608,384,2676,85.7,88.6,7.0
 markov_arid,58,1380,263,619,356,2676,86.7,88.0,7.0
 markov_empirical,45,1372,149,678,432,2676,83.9,92.8,5.4
+markov_empirical_cal,90,1534,30,339,683,2676,74.5,95.5,10.8
+markov_empirical_cal_cont,90,1600,34,389,563,2676,79.0,95.4,10.8
+markov_empirical_cont,49,1559,157,691,220,2676,91.8,92.3,5.9
+markov_empirical_cont_nbr,38,1534,135,681,288,2676,89.2,93.5,4.6
+markov_empirical_nbr,34,1349,121,657,515,2676,80.8,94.2,4.1
 markov_tropical,45,1374,124,538,595,2676,77.8,93.7,5.4
 oracle,0,1843,0,833,0,2676,100.0,100.0,0.0
 serval,58,1384,263,611,360,2676,86.5,88.0,7.0

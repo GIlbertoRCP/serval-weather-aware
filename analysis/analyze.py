@@ -38,6 +38,11 @@ LABELS = {
     "serval": "Serval (forecast side channel)",
     "markov": "Serval + Markov tracking (ours)",
     "markov_empirical": "Serval + Markov, fitted prior (ours)",
+    "markov_empirical_cont": "Serval + Markov, fitted prior, time decay (ours)",
+    "markov_empirical_cal": "Serval + Markov, calibrated forecast (ours)",
+    "markov_empirical_cal_cont": "Serval + Markov, calibrated, time decay (ours)",
+    "markov_empirical_nbr": "Serval + Markov, neighbor cells (ours)",
+    "markov_empirical_cont_nbr": "Serval + Markov, time decay + neighbors (ours)",
     "oracle": "Cloud oracle",
 }
 COLORS = {
@@ -46,6 +51,11 @@ COLORS = {
     "serval": "#2b6cb0",
     "markov": "#2f9e44",
     "markov_empirical": "#0c8599",
+    "markov_empirical_cont": "#e8590c",
+    "markov_empirical_cal": "#c2255c",
+    "markov_empirical_cal_cont": "#5f3dc4",
+    "markov_empirical_nbr": "#66a80f",
+    "markov_empirical_cont_nbr": "#d6336c",
     "oracle": "#7b4fb3",
 }
 
@@ -216,10 +226,10 @@ def main():
 
     figure(["inorder", "serval"], "Reproduction of Fig. 7: high-priority latency", "fig7_reproduction.png")
     figure(["serval_noweather", "serval"], "Reproduction of Fig. 8b: effect of weather", "fig8b_reproduction.png")
-    figure(["serval_noweather", "serval", "markov", "markov_empirical", "oracle"], "Extension: cloud tracking",
+    figure(["serval_noweather", "serval", "markov", "markov_empirical", "markov_empirical_cont", "oracle"], "Extension: cloud tracking",
            "extension_latency_cdf.png")
 
-    ext = [r for r in rows if r["arm"] in ("serval_noweather", "serval", "markov", "markov_empirical", "oracle")]
+    ext = [r for r in rows if r["arm"] in ("serval_noweather", "serval", "markov", "markov_empirical", "markov_empirical_cont", "oracle")]
     if ext:
         fig, ax = plt.subplots(figsize=(5.5, 3.5))
         ax.bar([LABELS[r["arm"]].replace(" (", "\n(") for r in ext], [r["onboard_compute_J"] for r in ext],

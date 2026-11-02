@@ -39,12 +39,21 @@ if __name__ == "__main__":
     parser.add_argument("--regime", choices=sorted(REGIMES), default="maritime")
     parser.add_argument("--p_cc", type=float, default=None,
                         help="override the regime's cloud-to-cloud persistence (Scenario C sweep)")
+    parser.add_argument("--decay", choices=["orbit", "continuous"], default="orbit",
+                        help="age observations in whole orbits, or by elapsed time when lambda > 0")
+    parser.add_argument("--forecast_calibration", type=str, default=None,
+                        help="JSON from tools/fit_markov.py; fuse forecast and Markov prior by Bayes")
+    parser.add_argument("--weather_cells_file", type=str, default=None,
+                        help="weather CSV with cell coordinates; enables neighbor observations")
     parser.add_argument("--query_ttl_passes", type=int, default=3)
     parser.add_argument("--image_cells_file", type=str, default="data/image_cells.csv")
     args = parser.parse_args()
     if args.weather_model != "none":
         WeatherEngine.engine = WeatherEngine(args.image_cells_file, mode=args.weather_model,
-                                             regime=args.regime, p_cc=args.p_cc, ttl=args.query_ttl_passes,
+                                             regime=args.regime, p_cc=args.p_cc, decay=args.decay,
+                                             calibration_file=args.forecast_calibration,
+                                             weather_cells_file=args.weather_cells_file,
+                                             ttl=args.query_ttl_passes,
                                              thresholds=args.cloud_threshold)
     const.DOWNLINK_BANDWIDTH_SCALING = args.downlink_bandwidth_scaling
     const.OEC = args.oec

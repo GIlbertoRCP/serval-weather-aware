@@ -23,6 +23,20 @@ Recovery policy (Methods Sec. 2.1): when a forest image of a cell is
 de-prioritised as cloudy `ttl` passes in a row, the satellite emits a small
 high-priority "SAR offload" alert so operators can re-task a radar satellite.
 
+Calibrated fusion (--forecast_calibration): instead of the lambda^k blend, the forecast
+is treated as evidence with likelihood ratios fitted on a separate week
+(tools/fit_markov.py) and combined with the Markov prior by Bayes' rule:
+
+    odds(clear | obs, forecast) = odds_prior * LR(forecast bin)
+
+The prior relaxes from the observed state toward an uninformative 0.5 (not the fitted
+chain's stationary clear fraction, which reflects how clear the training week was).
+
+Neighbor observations (--weather_cells_file): when a cell has no observation of its own,
+the most recent observation of an adjacent cell (0.5 degree grid, diagonals included) is
+used instead, its weight scaled by rho, the same-hour cloud correlation between adjacent
+cells fitted on the training week.
+
 Modes:
   none   - engine disabled, simulator is byte-for-byte baseline Serval
   markov - the extension described above
@@ -30,6 +44,7 @@ Modes:
 """
 
 import csv
+import json
 
 STEP_SECONDS = 90 * 60
 
@@ -41,7 +56,7 @@ REGIMES = {
     "tropical": {"p_cc": 0.85, "cloud_fraction": 0.75},
     # Fitted by tools/fit_markov.py on ERA5 for 2026-10-13..19, a week disjoint from the
     # simulated period (data/public/weather_california_train.csv).
-    "empirical": {"p_cc": 0.770, "p_ss": 0.975, "cloud_fraction": 0.103},
+    "empirical": {"p_cc": 0.770, "p_ss": 0.975, "cloud_fraction": 0.103, "rho_neighbor": 0.640},
 }
 
 ALERT_BITS = 8000  # ~1 KB metadata alert
@@ -51,9 +66,16 @@ class WeatherEngine:
     engine = None  # singleton used by PlanetSatellite / PlanetGS
 
     def __init__(self, image_cells_file, mode="markov", regime="maritime", p_cc=None, ttl=3,
-                 thresholds=(0.2, 0.8)):
+                 thresholds=(0.2, 0.8), decay="orbit", calibration_file=None,
+                 weather_cells_file=None):
         self.mode = mode
         self.ttl = ttl
+        self.decay = decay
+        self.lr = None
+        if calibration_file:
+            with open(calibration_file) as fh:
+                cal = json.load(fh)
+            self.lr, self.bin_width = cal["likelihood_ratio_clear"], cal["bin_width_pct"]
         self.low, self.high = thresholds
         if p_cc is None:
             p_cc = REGIMES[regime]["p_cc"]
@@ -61,6 +83,16 @@ class WeatherEngine:
         p_ss = REGIMES[regime].get("p_ss", 1 - pi_c * (1 - p_cc) / (1 - pi_c))
         self.p_cc, self.p_ss = p_cc, max(0.0, min(1.0, p_ss))
         self.lam = self.p_cc + self.p_ss - 1
+        self.rho = REGIMES[regime].get("rho_neighbor", 0.0)
+        self.neighbors = {}  # cell -> adjacent cells
+        if weather_cells_file:
+            coords = {}
+            with open(weather_cells_file) as fh:
+                for row in csv.DictReader(fh):
+                    coords.setdefault(int(row["cell_id"]), (float(row["lat"]), float(row["lon"])))
+            for c, (la, lo) in coords.items():
+                self.neighbors[c] = [n for n, (la2, lo2) in coords.items()
+                                     if n != c and abs(la2 - la) <= 0.501 and abs(lo2 - lo) <= 0.501]
 
         self.info = {}  # image name -> (cell, clear, forest)
         with open(image_cells_file) as fh:
@@ -68,7 +100,8 @@ class WeatherEngine:
                 self.info[row["image"]] = (int(row["cell_id"]), int(row["clear"]), row["forest"] == "True")
         self.last_obs = {}  # cell -> (datetime, clear)
         self.cloudy_streak = {}  # cell -> consecutive forest images de-prioritised as cloudy
-        self.stats = {"predictions": 0, "with_observation": 0, "observations": 0, "sar_alerts": 0}
+        self.stats = {"predictions": 0, "with_observation": 0, "with_neighbor_observation": 0,
+                      "observations": 0, "sar_alerts": 0}
 
     def _p_clear_markov(self, clear, steps):
         """P(clear after `steps` transitions | current state)."""
@@ -85,14 +118,39 @@ class WeatherEngine:
         if self.mode == "oracle":
             return float(clear)
         forecast = image.side_channel_info["cloud"]
-        obs = self.last_obs.get(cell)
+        obs, weight = self.last_obs.get(cell), 1.0
+        if (obs is None or obs[0] >= now) and self.rho > 0:
+            nearby = [self.last_obs[n] for n in self.neighbors.get(cell, ())
+                      if n in self.last_obs and self.last_obs[n][0] < now]
+            obs, weight = (max(nearby), self.rho) if nearby else (None, 1.0)
+            if obs is not None:
+                self.stats["with_neighbor_observation"] += 1
         if obs is None or obs[0] >= now:
-            return forecast
-        self.stats["with_observation"] += 1
-        # The chain advances in whole orbits (lambda can be negative, e.g. the arid regime)
-        steps = max(1, round((now - obs[0]).total_seconds() / STEP_SECONDS))
-        memory = abs(self.lam) ** steps
+            return forecast if self.lr is None else self._calibrated(0.5, forecast)
+        if weight == 1.0:
+            self.stats["with_observation"] += 1
+        elapsed = (now - obs[0]).total_seconds() / STEP_SECONDS
+        if self.decay == "continuous" and self.lam > 0:
+            # Elapsed time in (fractional) orbits, so a frame seconds after an observation in
+            # the same pass trusts it almost fully
+            steps = elapsed
+        else:
+            # The chain advances in whole orbits (lambda can be negative, e.g. the arid regime)
+            steps = max(1, round(elapsed))
+        memory = weight * abs(self.lam) ** steps
+        if self.lr is not None:
+            prior = 0.5 + ((1.0 if obs[1] else 0.0) - 0.5) * memory
+            return self._calibrated(prior, forecast)
         return memory * self._p_clear_markov(obs[1], steps) + (1 - memory) * forecast
+
+    def _calibrated(self, prior, forecast):
+        """Bayes update of P(clear) with the forecast's fitted likelihood ratio."""
+        cloud_pct = (1 - forecast) * 100
+        lr = self.lr[min(int(cloud_pct // self.bin_width), len(self.lr) - 1)]
+        if prior >= 1.0:
+            return 1.0
+        odds = prior / (1 - prior) * lr
+        return odds / (1 + odds)
 
     def observe(self, image):
         """Record the true cloud state of an image once it is known (called at that moment

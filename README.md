@@ -142,6 +142,9 @@ All arms share the workload, orbits, ground stations, 1% compute/network budget 
 | `markov` | Serval + our Markov cloud tracking, maritime prior | `--weather_model markov --regime maritime` |
 | `oracle` | Side channel replaced by ground truth (upper bound) | `--weather_model oracle` |
 | `markov_empirical` | Markov tracking with persistence fitted by `tools/fit_markov.py` on a disjoint week (2026-10-13 to 19) | `--weather_model markov --regime empirical` |
+| `markov_empirical_cont` | Same, but observations age by elapsed time rather than at least one whole orbit, so a frame seconds after an observation in the same pass trusts it | `... --regime empirical --decay continuous` |
+| `markov_empirical_nbr`, `markov_empirical_cont_nbr` | A cell with no observation of its own borrows the latest one from an adjacent cell, weighted by the fitted neighbor correlation ρ = 0.64 (without / with time decay) | `... --weather_cells_file data/public/weather_california.csv` |
+| `markov_empirical_cal`, `markov_empirical_cal_cont` | Forecast calibrated on the training week and fused with the Markov prior by Bayes' rule (without / with time decay) | `... --forecast_calibration data/public/forecast_calibration.json` |
 | `markov_arid`, `markov_tropical` | Scenario B: sensitivity to the regime prior | `--regime arid` / `--regime tropical` |
 | `sweep_pcc10` ... `sweep_pcc70` | Scenario C: cloud persistence p_cc = 0.1 ... 0.7 (fitted p_ss held fixed) | `--regime empirical --p_cc 0.1` ... |
 | `inorder`, `serval` in `data/generated-rate/fire02`, `fire15`, `fire5` | Fig. 8: same workload with fire in 2%, 15% and 50% of clear forest frames (main run: 5%) | generator `--fire_share` |
@@ -188,6 +191,11 @@ From `results/summary.csv` and `results/cloud_decisions.csv`:
 | `serval` | 42 / 45 | 1.23 h | 1,334 s (11.1 Wh) | 88.0% | 7.0% | — |
 | `markov` (maritime prior) | 42 / 45 | 1.23 h | 1,402 s | 88.6% | 7.0% | 50 |
 | `markov_empirical` (fitted prior) | 42 / 45 | 1.23 h | 1,526 s (12.7 Wh) | 92.8% | 5.4% | 50 |
+| `markov_empirical_cont` (fitted prior, time decay) | 41 / 45 | 1.23 h | 891 s (7.4 Wh) | 92.3% | 5.9% | 62 |
+| `markov_empirical_nbr` (fitted prior, neighbor cells) | 42 / 45 | 1.23 h | 1,770 s (14.8 Wh) | 94.2% | **4.1%** | 49 |
+| `markov_empirical_cont_nbr` (time decay + neighbor cells) | 41 / 45 | 1.23 h | 1,092 s (9.1 Wh) | 93.5% | 4.6% | 60 |
+| `markov_empirical_cal` (calibrated forecast) | 40 / 45 | 1.25 h (p90 3.2 h) | 2,229 s (18.6 Wh) | 95.5% | 10.8% | 63 |
+| `markov_empirical_cal_cont` (calibrated, time decay) | 40 / 45 | 1.25 h (p90 3.2 h) | 1,870 s (15.6 Wh) | 95.4% | 10.8% | 70 |
 | `oracle` | 45 / 45 | 0.87 h | 204 s | 100% | 0% | 86 |
 
 **Baseline reproduction (Scenario A).** Serval delivers fire images about 28x faster than in-order downlink (median 1.23 h vs 34.4 h, and all 45 vs 24 delivered), the trend of paper Fig. 7. The weather side channel cuts onboard filter compute by 83% (paper Table 5: 83.6%). Unlike paper Fig. 8b, it does not shorten fire latency here: at our scale compute is not the bottleneck, and the forecast wrongly calls 3 clear fire images cloudy.
@@ -204,6 +212,12 @@ Serval keeps high-priority latency flat across a 7x increase in arrival rate. At
 
 **Extension.** With persistence fitted on a separate week, Markov tracking raises cloud-decision accuracy from 88.0% to 92.8% and cuts clear images wrongly skipped as cloudy from 263 to 149 (−43%), at 14% more compute than Serval (still 81% below no-weather Serval). Fire latency is unchanged: the 3 fires Serval loses are still lost. The SAR offload alerts reach the ground in a median 1.23 h.
 
+**Time-based decay (`markov_empirical_cont`).** By default an observation is aged by at least one whole orbit, even for the next frame of the same pass seconds later. Aging it by elapsed time instead lets those frames reuse the observation, so the cloud filter runs on 220 forest images instead of 432. Onboard compute falls to 891 s: 42% below the fitted-prior arm and 33% below Serval. Accuracy stays close (92.3% vs 92.8%; Serval 88.0%), and clear images lost rise slightly (5.9% vs 5.4%; Serval 7.0%). One more fire is lost (41 of 45 delivered vs 42), so this variant trades a little recall for a large energy saving. With 45 fires, one fire is within noise but is reported as measured.
+
+**Neighbor cells (`markov_empirical_nbr`, `markov_empirical_cont_nbr`).** Clouds are spatially correlated: adjacent 0.5° cells agree 94% of the time in the training week (correlation ρ = 0.64, fitted by `tools/fit_markov.py`). A cell's own observation is available for 66% of predictions; borrowing an adjacent cell's (with weight ρ) covers another 25%. With the fitted prior this gives the lowest loss of usable imagery of any non-oracle arm: 4.1% of clear forest images lost (Serval 7.0%), 94.2% decision accuracy, the same 42 of 45 fires as Serval, at 33% more compute than Serval. Combined with time decay it keeps most of that (4.6% lost, 93.5% accuracy) while using 18% less compute than Serval, with one fire fewer. Both improve on their counterparts without neighbor sharing on every cloud-decision metric.
+
+**Calibrated forecast (`markov_empirical_cal*`), a negative result.** `tools/fit_markov.py` fits, per 10% forecast bin, the likelihood ratio P(bin | clear) / P(bin | cloudy) on the training week, and the engine combines it with the Markov prior by Bayes' rule. Accuracy rises to 95.5%, the best of any non-oracle arm, and wrongly-clear skips fall from 149 to 30. But the errors move to the expensive side: clear images skipped as cloudy rise from 45 to 90 (10.8% of clear forest images lost, vs 7.0% for Serval), one or two more fires are lost (40 of 45), and compute rises 67% over Serval. Two reasons. First, a wrongly-clear skip only wastes a fire-filter run, while a wrongly-cloudy skip discards usable imagery, so an accuracy that weights both equally rewards the wrong trade. Second, the training week was 10% cloudy and the test week 54%, so the forecast's error profile shifted. Under Serval's fixed 0.2 / 0.8 thresholds, the uncalibrated forecast is the better input; a cost-aware threshold would be the natural next step, but it would change Serval's decision rule, which this project keeps fixed.
+
 **Scenario B (regime priors).** The proposal's maritime prior gives almost no gain (88.6%) and the arid prior none (88.0%): with λ = p_cc + p_ss − 1 near 0 the chain forgets an observation within one orbit, and the estimate falls back to the forecast. The tropical prior (93.7%) and the fitted prior (92.8%) carry memory across orbits (λ = 0.40 and 0.745). Measured California persistence is high: λ = 0.745 on the training week and 0.687 on the test week.
 
 **Scenario C (persistence sweep, `scenario_c_pareto.png`).** At p_cc ≤ 0.2 the extension behaves like Serval (7.0% clear images lost, 55.9 Wh saved). Raising p_cc to 0.5 lowers losses to 4.4% while still saving 51.7 Wh, 78% of no-weather Serval's filter energy. Beyond 0.5 nothing changes. Fire latency is flat across the sweep (median 1.23 h; 42 to 43 of 45 delivered), so the trade-off is energy vs. usable clear imagery, not latency.
@@ -214,6 +228,9 @@ Serval keeps high-priority latency flat across a 7x increase in arrival rate. At
 |---|---|---|
 | Climate regime prior (cloud persistence p_cc, p_ss or cloud fraction) | `--regime`, `REGIMES` in `weather_engine.py` | maritime (0.65, 0.6) |
 | Override p_cc of the chosen regime | `--p_cc` | regime value |
+| How observations age | `--decay orbit` (at least one orbit) or `--decay continuous` (elapsed time, when λ > 0) | orbit |
+| Neighbor-cell observations | `--weather_cells_file <weather csv>` (weight `rho_neighbor` in `REGIMES`) | off |
+| Bayesian forecast calibration | `--forecast_calibration <json>`, fitted by `tools/fit_markov.py` | off |
 | Fitted persistence | `python tools/fit_markov.py data/public/weather_california_train.csv` | p_cc 0.770, p_ss 0.975 |
 | Passes before SAR alert | `--query_ttl_passes` | 3 |
 | Side-channel thresholds | `--cloud_threshold LOW HIGH` | 0.2 0.8 |

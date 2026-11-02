@@ -36,9 +36,23 @@ wait_all
 run oracle           "$START" "$END" --weather_model oracle
 # Persistence fitted on a disjoint week (2026-10-13..19) by tools/fit_markov.py
 run markov_empirical "$START" "$END" --weather_model markov --regime empirical
+# Same, but observations age by elapsed time instead of at least one whole orbit
+run markov_empirical_cont "$START" "$END" --weather_model markov --regime empirical --decay continuous
+# Forecast calibrated on the same training week, fused with the Markov prior by Bayes' rule
+CAL=(--forecast_calibration "$ROOT/data/public/forecast_calibration.json")
+run markov_empirical_cal "$START" "$END" --weather_model markov --regime empirical "${CAL[@]}"
+wait_all
+run markov_empirical_cal_cont "$START" "$END" --weather_model markov --regime empirical "${CAL[@]}" \
+    --decay continuous
 # Sensitivity of the extension to the climate-regime prior (Methods Sec. 2)
 run markov_arid      "$START" "$END" --weather_model markov --regime arid
 run markov_tropical  "$START" "$END" --weather_model markov --regime tropical
+wait_all
+# Cells without their own observation borrow an adjacent cell's, weighted by rho_neighbor
+NBR=(--weather_cells_file "$ROOT/data/public/weather_california.csv")
+run markov_empirical_nbr "$START" "$END" --weather_model markov --regime empirical "${NBR[@]}"
+run markov_empirical_cont_nbr "$START" "$END" --weather_model markov --regime empirical "${NBR[@]}" \
+    --decay continuous
 wait_all
 # Scenario C (proposal Sec. 4.2): sweep cloud persistence p_cc 0.1..0.7, fitted p_ss held fixed
 for pcc in 10 20 30 40 50 60 70; do
