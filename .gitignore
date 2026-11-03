@@ -13,3 +13,6 @@ results/quick/
 data/generated/
 data/generated-rate/
 data/quick-rate/
+data/generated-seeds/
+data/quick-seeds/
+data/*/analysis/

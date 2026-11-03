@@ -1,0 +1,6 @@
+arm,seeds,fire_delivered_pct_diff_mean,fire_delivered_pct_diff_std,fire_delivered_pct_better_in,fire_median_h_diff_mean,fire_median_h_diff_std,fire_median_h_better_in,onboard_compute_s_diff_mean,onboard_compute_s_diff_std,onboard_compute_s_better_in,decision_accuracy_pct_diff_mean,decision_accuracy_pct_diff_std,decision_accuracy_pct_better_in,clear_images_lost_pct_diff_mean,clear_images_lost_pct_diff_std,clear_images_lost_pct_better_in
+serval_noweather,5,4.4,3.93,4/5,0.09,0.16,0/5,6148.02,376.65,0/5,11.72,0.8,5/5,-6.32,1.95,5/5
+markov_empirical,5,1.07,1.47,2/5,-0.01,0.01,3/5,160.2,23.48,0/5,4.58,0.43,5/5,-1.38,0.73,5/5
+markov_empirical_nbr,5,1.07,1.47,2/5,-0.0,0.01,1/5,372.74,59.35,0/5,6.04,0.72,5/5,-2.28,1.45,5/5
+markov_empirical_cont_nbr,5,0.63,2.08,2/5,-0.12,0.16,4/5,-294.3,86.85,5/5,5.26,0.78,5/5,-1.66,1.44,4/5
+oracle,5,4.4,3.93,4/5,-0.31,0.16,5/5,-1166.96,61.48,5/5,11.72,0.8,5/5,-6.32,1.95,5/5
